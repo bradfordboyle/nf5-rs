@@ -4,3 +4,6 @@ version = "0.1.0"
 authors = ["Bradford D. Boyle <bradford.d.boyle@gmail.com>"]
 
 [dependencies]
+byteorder = "1.0.0"
+pcap = "0.5.7"
+pnet = "0.16.0"
