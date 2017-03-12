@@ -2,7 +2,9 @@ extern crate pcap;
 extern crate pnet;
 extern crate byteorder;
 
+use std::env;
 use std::path::Path;
+use std::process;
 
 use byteorder::{BigEndian, ReadBytesExt};
 use pcap::Capture;
@@ -49,8 +51,6 @@ struct Record {
     dst_mask: u8
 }
 
-
-
 impl Record {
     pub fn new(data: &[u8]) -> Record {
         let mut rdr = std::io::Cursor::new(data);
@@ -84,23 +84,28 @@ impl Record {
     }
 }
 
-
 fn main() {
-    println!("Hello, world!");
+    if let Some(arg1) = env::args().nth(1) {
+        println!("The first argument is {}", arg1);
+        let path = Path::new(&arg1);
+        let mut cap = Capture::from_file(path)
+            .unwrap();
 
-    let path = Path::new("./netflow000.10.pcap");
-    let mut cap = Capture::from_file(path)
-    .unwrap();
-
-    while let Ok(packet) = cap.next() {
-        let e = EthernetPacket::new(packet.data).unwrap();
-        match e.get_ethertype() {
-            EtherType(0x0800) => {
-                handle_ipv4(e.payload());
+        while let Ok(packet) = cap.next() {
+            let e = EthernetPacket::new(packet.data).unwrap();
+            match e.get_ethertype() {
+                EtherType(0x0800) => {
+                    handle_ipv4(e.payload());
+                }
+                EtherType(_) => {panic!("huh?");}
             }
-            EtherType(_) => {panic!("huh?");}
         }
+    } else {
+        println!("pcap filename required");
+        process::exit(1);
     }
+
+
 
 }
 
