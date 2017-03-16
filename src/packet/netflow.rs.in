@@ -1,0 +1,52 @@
+use pnet_macros_support::types::*;
+
+#[packet]
+pub struct Netflow {
+    version: u16be,
+    count: u16be,
+    sys_uptime: u32be,
+    unix_secs: u32be,
+    unix_nsecs: u32be,
+    flow_sequence: u32be,
+    engine_type: u8,
+    engine_id: u8,
+    sampling_interval: u16be,
+
+    #[payload]
+    payload: Vec<u8>
+}
+
+#[test]
+fn netflow_packet_test() {
+    let mut packet = [0u8; 24];
+    {
+        let mut netflow = MutableNetflowPacket::new(&mut packet[..]).unwrap();
+        netflow.set_version(5);
+        assert_eq!(netflow.get_version(), 5);
+
+        netflow.set_count(1);
+        assert_eq!(netflow.get_count(), 1);
+
+        netflow.set_sys_uptime(1228600932);
+        assert_eq!(netflow.get_sys_uptime(), 1228600932);
+
+        netflow.set_unix_secs(1185457716);
+        assert_eq!(netflow.get_unix_secs(), 1185457716);
+
+        netflow.set_unix_nsecs(855073578);
+        assert_eq!(netflow.get_unix_nsecs(), 855073578);
+
+        netflow.set_flow_sequence(2922592624);
+        assert_eq!(netflow.get_flow_sequence(), 2922592624);
+
+        netflow.set_engine_type(0);
+        assert_eq!(netflow.get_engine_type(), 0);
+
+        netflow.set_engine_id(5);
+        assert_eq!(netflow.get_engine_id(), 5);
+
+        netflow.set_sampling_interval(0);
+        assert_eq!(netflow.get_sampling_interval(), 0);
+
+    }
+}
