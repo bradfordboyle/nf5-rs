@@ -64,5 +64,7 @@ fn handle_udp(d: &[u8]) {
 
 fn handle_netflow(d: &[u8]) {
     let n = NetflowPacket::new(d).unwrap();
-    println!("{:?}", n);
+    for r in n.get_records() {
+        println!("{:?}", r);
+    }
 }
