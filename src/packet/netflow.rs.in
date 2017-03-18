@@ -1,7 +1,15 @@
+extern crate serde;
+
 use pnet_macros_support::types::*;
 
 use std::fmt;
 use std::net::Ipv4Addr;
+use std::ops::Add;
+
+use self::serde::ser::Serialize;
+use self::serde::ser::SerializeStruct;
+use self::serde::Serializer;
+use time::{Duration, Tm};
 
 #[packet]
 pub struct Netflow {
@@ -19,6 +27,10 @@ pub struct Netflow {
 
     #[payload]
     payload: Vec<u8>
+}
+
+fn netflow_records_length(p: &NetflowPacket) -> usize {
+    p.get_count() as usize * 48
 }
 
 #[packet]
@@ -57,8 +69,132 @@ fn record_payload_length(p: &RecordPacket) -> usize {
     0usize
 }
 
-fn netflow_records_length(p: &NetflowPacket) -> usize {
-    p.get_count() as usize * 48
+impl Record {
+    pub fn source(&self) -> &Ipv4Addr {
+        &self.source
+    }
+
+    pub fn destination(&self) -> &Ipv4Addr {
+        &self.source
+    }
+
+    pub fn next_hop(&self) -> &Ipv4Addr {
+        &self.next_hop
+    }
+
+    pub fn input(&self) -> u16 {
+        self.input
+    }
+
+    pub fn output(&self) -> u16 {
+        self.output
+    }
+
+    pub fn d_pkts(&self) -> u32 {
+        self.d_pkts
+    }
+
+    pub fn d_octets(&self) -> u32 {
+        self.d_octets
+    }
+
+    pub fn first_sec(&self, boot: Tm) -> i64 {
+        let f = boot.add(
+            Duration::milliseconds(self.first as i64)
+        ).to_timespec();
+        f.sec
+    }
+
+    pub fn first_nsec(&self, boot: Tm) -> i32 {
+        let f = boot.add(
+            Duration::milliseconds(self.first as i64)
+        ).to_timespec();
+        f.nsec
+    }
+
+    pub fn last_sec(&self, boot: Tm) -> i64 {
+        let f = boot.add(
+            Duration::milliseconds(self.last as i64)
+        ).to_timespec();
+        f.sec
+    }
+
+    pub fn last_nsec(&self, boot: Tm) -> i32 {
+        let f = boot.add(
+            Duration::milliseconds(self.last as i64)
+        ).to_timespec();
+        f.nsec
+    }
+
+    pub fn last_timestamp(&self, boot: Tm) -> Tm {
+        boot.add(Duration::milliseconds(self.last as i64))
+    }
+
+    pub fn src_port(&self) -> u16 {
+        self.src_port
+    }
+
+    pub fn dst_port(&self) -> u16 {
+        self.dst_port
+    }
+
+    pub fn tcp_flags(&self) -> u8 {
+        self.tcp_flags
+    }
+
+    pub fn prot(&self) -> u8 {
+        self.prot
+    }
+
+    pub fn tos(&self) -> u8 {
+        self.tos
+    }
+
+    pub fn src_as(&self) -> u16 {
+        self.src_as
+    }
+
+    pub fn dst_as(&self) -> u16 {
+        self.dst_as
+    }
+
+    pub fn src_mask(&self) -> u8 {
+        self.src_mask
+    }
+
+    pub fn dst_mask(&self) -> u8 {
+        self.dst_mask
+    }
+}
+
+impl Serialize for Record {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        let mut struc = serializer.serialize_struct("Record", 16)?;
+        struc.serialize_field("source", self.source())?;
+        struc.serialize_field("destination", self.destination())?;
+        struc.serialize_field("next_hop", self.next_hop())?;
+        struc.serialize_field("input", &self.input())?;
+        struc.serialize_field("output", &self.output())?;
+        struc.serialize_field("d_pkts", &self.d_pkts())?;
+        struc.serialize_field("d_octets", &self.d_octets())?;
+        // TODO resolved time
+        // struc.serialize_field("first_sec", &self.first_sec(boot));
+        // struc.serialize_field("first_nsec", &self.first_nsec(boot));
+        // struc.serialize_field("last_sec", &self.last_sec(boot));
+        // struc.serialize_field("last_nsec", &self.last_nsec(boot));
+        struc.serialize_field("src_port", &self.src_port())?;
+        struc.serialize_field("dst_port", &self.dst_port())?;
+        struc.serialize_field("tcp_flags", &self.tcp_flags())?;
+        struc.serialize_field("prot", &self.prot())?;
+        struc.serialize_field("tos", &self.tos())?;
+        struc.serialize_field("src_as", &self.src_as())?;
+        struc.serialize_field("dst_as", &self.dst_as())?;
+        struc.serialize_field("src_mask", &self.src_mask())?;
+        struc.serialize_field("dst_mask", &self.dst_mask())?;
+        struc.end()
+    }
 }
 
 impl fmt::Display for Record {
