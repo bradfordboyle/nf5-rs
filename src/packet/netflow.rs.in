@@ -49,7 +49,12 @@ pub struct Record {
     pad2: u16be,
     // is there a better way to do this?
     #[payload]
+    #[length_fn = "record_payload_length"]
     payload: Vec<u8>
+}
+
+fn record_payload_length(p: &RecordPacket) -> usize {
+    0usize
 }
 
 fn netflow_records_length(p: &NetflowPacket) -> usize {
