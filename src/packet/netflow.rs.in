@@ -1,0 +1,103 @@
+use pnet_macros_support::types::*;
+
+use std::fmt;
+use std::net::Ipv4Addr;
+
+#[packet]
+pub struct Netflow {
+    version: u16be,
+    count: u16be,
+    sys_uptime: u32be,
+    unix_secs: u32be,
+    unix_nsecs: u32be,
+    flow_sequence: u32be,
+    engine_type: u8,
+    engine_id: u8,
+    sampling_interval: u16be,
+    #[length_fn = "netflow_records_length"]
+    records: Vec<Record>,
+
+    #[payload]
+    payload: Vec<u8>
+}
+
+#[packet]
+pub struct Record {
+    #[construct_with(u8, u8, u8, u8)]
+    source: Ipv4Addr,
+    #[construct_with(u8, u8, u8, u8)]
+    destination: Ipv4Addr,
+    #[construct_with(u8, u8, u8, u8)]
+    next_hop: Ipv4Addr,
+    input: u16be,
+    output: u16be,
+    d_pkts: u32be,
+    d_octets: u32be,
+    first: u32be,
+    last: u32be,
+    src_port: u16be,
+    dst_port: u16be,
+    // is there a better way to handle padding?
+    pad1: u8,
+    tcp_flags: u8,
+    prot: u8,
+    tos: u8,
+    src_as: u16be,
+    dst_as: u16be,
+    src_mask: u8,
+    dst_mask: u8,
+    pad2: u16be,
+    // is there a better way to do this?
+    #[payload]
+    payload: Vec<u8>
+}
+
+fn netflow_records_length(p: &NetflowPacket) -> usize {
+    p.get_count() as usize * 48
+}
+
+impl fmt::Display for Record {
+    // This trait requires `fmt` with this exact signature.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Write strictly the first element into the supplied output
+        // stream: `f`. Returns `fmt::Result` which indicates whether the
+        // operation succeeded or failed. Note that `write!` uses syntax which
+        // is very similar to `println!`.
+        write!(f, "{src:>width$} -> {dst:>width$}", src=self.source, dst=self.destination, width=15)
+    }
+}
+
+#[test]
+fn netflow_packet_test() {
+    let mut packet = [0u8; 24];
+    {
+        let mut netflow = MutableNetflowPacket::new(&mut packet[..]).unwrap();
+        netflow.set_version(5);
+        assert_eq!(netflow.get_version(), 5);
+
+        netflow.set_count(1);
+        assert_eq!(netflow.get_count(), 1);
+
+        netflow.set_sys_uptime(1228600932);
+        assert_eq!(netflow.get_sys_uptime(), 1228600932);
+
+        netflow.set_unix_secs(1185457716);
+        assert_eq!(netflow.get_unix_secs(), 1185457716);
+
+        netflow.set_unix_nsecs(855073578);
+        assert_eq!(netflow.get_unix_nsecs(), 855073578);
+
+        netflow.set_flow_sequence(2922592624);
+        assert_eq!(netflow.get_flow_sequence(), 2922592624);
+
+        netflow.set_engine_type(0);
+        assert_eq!(netflow.get_engine_type(), 0);
+
+        netflow.set_engine_id(5);
+        assert_eq!(netflow.get_engine_id(), 5);
+
+        netflow.set_sampling_interval(0);
+        assert_eq!(netflow.get_sampling_interval(), 0);
+
+    }
+}
