@@ -1,27 +1,21 @@
 extern crate pcap;
 extern crate pnet;
-extern crate pnet_macros_support;
-
-#[macro_use]
 extern crate serde_json;
-extern crate time;
 
 mod packet;
+
 use packet::netflow::NetflowPacket;
-
-use std::env;
-// use std::ops::Sub;
-use std::path::Path;
-use std::process;
-
 use pcap::Capture;
+use pnet::packet::FromPacket;
 use pnet::packet::Packet;
 use pnet::packet::udp::UdpPacket;
-use pnet::packet::ethernet::{EthernetPacket, EtherType};
+use pnet::packet::ethernet::EthernetPacket;
+use pnet::packet::ethernet::EtherTypes::Ipv4;
 use pnet::packet::ipv4::Ipv4Packet;
-use pnet::packet::ip::IpNextHeaderProtocol;
-
-// use time::{Duration,Timespec};
+use pnet::packet::ip::IpNextHeaderProtocols::Udp;
+use std::env;
+use std::path::Path;
+use std::process;
 
 fn main() {
     if let Some(arg1) = env::args().nth(1) {
@@ -31,8 +25,8 @@ fn main() {
         while let Ok(packet) = cap.next() {
             let e = EthernetPacket::new(packet.data).unwrap();
             match e.get_ethertype() {
-                EtherType(0x0800) => handle_ipv4(e.payload()),
-                EtherType(_) => panic!("huh?"),
+                Ipv4 => handle_ipv4(e.payload()),
+                _ => panic!("huh?"),
             }
         }
     } else {
@@ -45,8 +39,8 @@ fn handle_ipv4(d: &[u8]) {
     let i = Ipv4Packet::new(d).unwrap();
 
     match i.get_next_level_protocol() {
-        IpNextHeaderProtocol(0x11) => handle_udp(i.payload()),
-        IpNextHeaderProtocol(_) => panic!("huh?"),
+        Udp => handle_udp(i.payload()),
+        _ => panic!("huh?"),
     }
 }
 
@@ -63,12 +57,6 @@ fn handle_udp(d: &[u8]) {
 
 fn handle_netflow(d: &[u8]) {
     let n = NetflowPacket::new(d).unwrap();
-    // let uptime = Duration::milliseconds(n.get_sys_uptime() as i64);
-    // let current_time = time::at_utc(Timespec::new(n.get_unix_secs() as i64, n.get_unix_nsecs() as i32));
-    // let boot = current_time.sub(uptime);
-
-    for r in n.get_records() {
-        let record = serde_json::to_string(&r).unwrap();
-        println!("{}", record);
-    }
+    let netflow = serde_json::to_string(&n.from_packet()).unwrap();
+    println!("{}", netflow);
 }
