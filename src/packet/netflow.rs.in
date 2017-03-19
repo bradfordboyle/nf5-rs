@@ -1,7 +1,13 @@
-use pnet_macros_support::types::*;
+extern crate pnet_macros_support;
+extern crate serde;
 
-use std::fmt;
+use self::pnet_macros_support::types::*;
+
 use std::net::Ipv4Addr;
+
+use self::serde::ser::Serialize;
+use self::serde::ser::SerializeStruct;
+use self::serde::Serializer;
 
 #[packet]
 pub struct Netflow {
@@ -19,6 +25,29 @@ pub struct Netflow {
 
     #[payload]
     payload: Vec<u8>
+}
+
+fn netflow_records_length(p: &NetflowPacket) -> usize {
+    p.get_count() as usize * 48
+}
+
+impl Serialize for Netflow {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        let mut struc = serializer.serialize_struct("Netflow", 10)?;
+        struc.serialize_field("version", &self.version)?;
+        struc.serialize_field("count", &self.count)?;
+        struc.serialize_field("sys_uptime", &self.sys_uptime)?;
+        struc.serialize_field("unix_secs", &self.unix_secs)?;
+        struc.serialize_field("unix_nsecs", &self.unix_nsecs)?;
+        struc.serialize_field("flow_sequence", &self.flow_sequence)?;
+        struc.serialize_field("engine_type", &self.engine_type)?;
+        struc.serialize_field("engine_id", &self.engine_id)?;
+        struc.serialize_field("sampling_interval", &self.sampling_interval)?;
+        struc.serialize_field("records", &self.records)?;
+        struc.end()
+    }
 }
 
 #[packet]
@@ -53,22 +82,35 @@ pub struct Record {
     payload: Vec<u8>
 }
 
-fn record_payload_length(p: &RecordPacket) -> usize {
+fn record_payload_length(_: &RecordPacket) -> usize {
     0usize
 }
 
-fn netflow_records_length(p: &NetflowPacket) -> usize {
-    p.get_count() as usize * 48
-}
-
-impl fmt::Display for Record {
-    // This trait requires `fmt` with this exact signature.
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Write strictly the first element into the supplied output
-        // stream: `f`. Returns `fmt::Result` which indicates whether the
-        // operation succeeded or failed. Note that `write!` uses syntax which
-        // is very similar to `println!`.
-        write!(f, "{src:>width$} -> {dst:>width$}", src=self.source, dst=self.destination, width=15)
+impl Serialize for Record {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        let mut struc = serializer.serialize_struct("Record", 18)?;
+        struc.serialize_field("source", &self.source)?;
+        struc.serialize_field("destination", &self.destination)?;
+        struc.serialize_field("next_hop", &self.next_hop)?;
+        struc.serialize_field("input", &self.input)?;
+        struc.serialize_field("output", &self.output)?;
+        struc.serialize_field("d_pkts", &self.d_pkts)?;
+        struc.serialize_field("d_octets", &self.d_octets)?;
+        // TODO resolved time
+        struc.serialize_field("first", &self.first)?;
+        struc.serialize_field("last", &self.first)?;
+        struc.serialize_field("src_port", &self.src_port)?;
+        struc.serialize_field("dst_port", &self.dst_port)?;
+        struc.serialize_field("tcp_flags", &self.tcp_flags)?;
+        struc.serialize_field("prot", &self.prot)?;
+        struc.serialize_field("tos", &self.tos)?;
+        struc.serialize_field("src_as", &self.src_as)?;
+        struc.serialize_field("dst_as", &self.dst_as)?;
+        struc.serialize_field("src_mask", &self.src_mask)?;
+        struc.serialize_field("dst_mask", &self.dst_mask)?;
+        struc.end()
     }
 }
 
@@ -104,5 +146,66 @@ fn netflow_packet_test() {
         netflow.set_sampling_interval(0);
         assert_eq!(netflow.get_sampling_interval(), 0);
 
+    }
+}
+
+#[test]
+fn record_packet_test() {
+    let mut packet = [0u8; 48];
+    {
+        let mut record = MutableRecordPacket::new(&mut packet[..]).unwrap();
+        record.set_source(Ipv4Addr::new(122, 166, 69, 123));
+        assert_eq!(record.get_source(), Ipv4Addr::new(122, 166, 69, 123));
+
+        record.set_destination(Ipv4Addr::new(21, 185, 87, 11));
+        assert_eq!(record.get_destination(), Ipv4Addr::new(21, 185, 87, 11));
+
+        record.set_next_hop(Ipv4Addr::new(99, 145, 4, 143));
+        assert_eq!(record.get_next_hop(), Ipv4Addr::new(99, 145, 4, 143));
+
+        record.set_input(108);
+        assert_eq!(record.get_input(), 108);
+
+        record.set_output(120);
+        assert_eq!(record.get_output(), 120);
+
+        record.set_d_pkts(5);
+        assert_eq!(record.get_d_pkts(), 5);
+
+        record.set_d_octets(809);
+        assert_eq!(record.get_d_octets(), 809);
+
+        record.set_first(1228600535);
+        assert_eq!(record.get_first(), 1228600535);
+
+        record.set_last(1228600535);
+        assert_eq!(record.get_last(), 1228600535);
+
+        record.set_src_port(64593);
+        assert_eq!(record.get_src_port(), 64593);
+
+        record.set_dst_port(80);
+        assert_eq!(record.get_dst_port(), 80);
+
+        record.set_tcp_flags(0x00);
+        assert_eq!(record.get_tcp_flags(), 0x00);
+
+        record.set_prot(6);
+        assert_eq!(record.get_prot(), 6);
+
+        record.set_tos(0x00);
+        assert_eq!(record.get_tos(), 0x00);
+
+        record.set_src_as(0);
+        assert_eq!(record.get_src_as(), 0);
+
+        record.set_dst_as(0);
+        assert_eq!(record.get_dst_as(), 0);
+
+        record.set_src_mask(19);
+        assert_eq!(record.get_src_mask(), 19);
+
+        record.set_dst_mask(0);
+        assert_eq!(record.get_dst_mask(), 0);
     }
 }
