@@ -100,7 +100,7 @@ impl Serialize for Record {
         struc.serialize_field("d_octets", &self.d_octets)?;
         // TODO resolved time
         struc.serialize_field("first", &self.first)?;
-        struc.serialize_field("last", &self.first)?;
+        struc.serialize_field("last", &self.last)?;
         struc.serialize_field("src_port", &self.src_port)?;
         struc.serialize_field("dst_port", &self.dst_port)?;
         struc.serialize_field("tcp_flags", &self.tcp_flags)?;
