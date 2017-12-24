@@ -1,5 +1,5 @@
-extern crate syntex;
 extern crate pnet_macros;
+extern crate syntex;
 
 use std::env;
 use std::path::Path;

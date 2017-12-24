@@ -51,7 +51,6 @@ fn handle_udp(d: &[u8]) {
     match dst_port {
         9500 => handle_netflow(u.payload()),
         _ => panic!("huh?"),
-
     }
 }
 
