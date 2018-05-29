@@ -3,9 +3,7 @@ use pnet_macros_support::types::*;
 
 use std::net::Ipv4Addr;
 
-use serde::ser::Serialize;
-use serde::ser::SerializeStruct;
-use serde::Serializer;
+use serde::ser::{Serialize, SerializeStruct, Serializer};
 
 #[packet]
 pub struct Netflow {

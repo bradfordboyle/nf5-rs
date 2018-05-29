@@ -1,3 +1,4 @@
+extern crate csv;
 extern crate pcap;
 extern crate pnet;
 extern crate pnet_macros_support;
@@ -27,7 +28,7 @@ fn main() {
         let path = Path::new(&arg1);
         let mut cap = Capture::from_file(path).unwrap();
 
-        let n = NetflowVisitor;
+        let n = CsvNetflowVisitor::new(io::stdout());
         let u = UdpVisitor::new(n, 9500);
         let i = Ipv4Visitor::new(u);
 
@@ -104,6 +105,28 @@ impl PacketVisitor for NetflowVisitor {
         if let Some(n) = NetflowPacket::new(d) {
             let netflow = serde_json::to_string(&n.from_packet())?;
             Ok(println!("{}", netflow))
+        } else {
+            Err(From::from("invalid Netflow v5 packet"))
+        }
+    }
+}
+
+struct CsvNetflowVisitor<W: io::Write> {
+    wtr: csv::Writer<W>,
+}
+
+impl<W: io::Write> CsvNetflowVisitor<W> {
+    pub fn new(wtr: W) -> Self {
+        Self { wtr: csv::Writer::from_writer(wtr) }
+    }
+}
+
+impl<W: io::Write> PacketVisitor for CsvNetflowVisitor<W> {
+    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>> {
+        if let Some(n) = NetflowPacket::new(d) {
+            self.wtr.serialize(n.from_packet())?;
+            self.wtr.flush()?;
+            Ok(())
         } else {
             Err(From::from("invalid Netflow v5 packet"))
         }
