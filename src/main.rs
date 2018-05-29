@@ -15,7 +15,10 @@ use pnet::packet::ethernet::EthernetPacket;
 use pnet::packet::ethernet::EtherTypes::Ipv4;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ip::IpNextHeaderProtocols::Udp;
+
+use std::error;
 use std::env;
+use std::io;
 use std::path::Path;
 use std::process;
 
@@ -24,16 +27,86 @@ fn main() {
         let path = Path::new(&arg1);
         let mut cap = Capture::from_file(path).unwrap();
 
+        let n = NetflowVisitor;
+        let u = UdpVisitor::new(n, 9500);
+        let i = Ipv4Visitor::new(u);
+
         while let Ok(packet) = cap.next() {
             let e = EthernetPacket::new(packet.data).unwrap();
             match e.get_ethertype() {
-                Ipv4 => handle_ipv4(e.payload()),
-                _ => panic!("huh?"),
+                Ipv4 => i.accept(e.payload()).expect("unable to process packet"),
+                _ => panic!("non-IPv4 packet found"),
             }
         }
     } else {
         println!("pcap filename required");
         process::exit(1);
+    }
+}
+
+trait PacketVisitor {
+    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>>;
+}
+
+struct Ipv4Visitor<V> {
+    next: V
+}
+
+impl<V> Ipv4Visitor<V> {
+    pub fn new(next: V) -> Self {
+        Self { next }
+    }
+}
+
+impl<V: PacketVisitor> PacketVisitor for Ipv4Visitor<V> {
+    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>> {
+        if let Some(i) = Ipv4Packet::new(d) {
+            match i.get_next_level_protocol() {
+                Udp => self.next.accept(i.payload()),
+                _ => Err(From::from("non-UDP packet found"))
+            }
+        } else {
+            Err(From::from("invalid IPv4 packet"))
+        }
+    }
+}
+
+struct UdpVisitor<V> {
+    next: V,
+    port: u16,
+}
+
+impl<V> UdpVisitor<V> {
+    pub fn new(next: V, port: u16) -> Self {
+        Self { next, port}
+    }
+}
+
+impl<V: PacketVisitor> PacketVisitor for UdpVisitor<V> {
+    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>> {
+        if let Some(u) = UdpPacket::new(d) {
+            let dst_port = u.get_destination();
+            if dst_port == self.port {
+                self.next.accept(u.payload())
+            } else {
+                Err(From::from("encountered UDP packet with unexpected port"))
+            }
+        } else {
+            Err(From::from("invalid UDP packet"))
+        }
+    }
+}
+
+struct NetflowVisitor;
+
+impl PacketVisitor for NetflowVisitor {
+    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>> {
+        if let Some(n) = NetflowPacket::new(d) {
+            let netflow = serde_json::to_string(&n.from_packet())?;
+            Ok(println!("{}", netflow))
+        } else {
+            Err(From::from("invalid Netflow v5 packet"))
+        }
     }
 }
 
