@@ -10,10 +10,10 @@ pnet_macros = "0.21.0"
 
 [dependencies]
 csv = "1"
-pcap = "0.5.7"
+pcap = "0.7"
 pnet = "0.21.0"
 pnet_macros = "0.21.0"
 pnet_macros_support = "0.21.0"
-serde = "0.9.11"
-serde_json = "0.9.9"
+serde = "1.0"
+serde_json = "1.0"
 time = "0.1"
