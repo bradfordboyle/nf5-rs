@@ -1,5 +1,7 @@
 extern crate pcap;
 extern crate pnet;
+extern crate pnet_macros_support;
+extern crate serde;
 extern crate serde_json;
 
 mod packet;

@@ -1,13 +1,11 @@
-extern crate pnet_macros_support;
-extern crate serde;
-
-use self::pnet_macros_support::types::*;
+use pnet::packet::PrimitiveValues;
+use pnet_macros_support::types::*;
 
 use std::net::Ipv4Addr;
 
-use self::serde::ser::Serialize;
-use self::serde::ser::SerializeStruct;
-use self::serde::Serializer;
+use serde::ser::Serialize;
+use serde::ser::SerializeStruct;
+use serde::Serializer;
 
 #[packet]
 pub struct Netflow {
