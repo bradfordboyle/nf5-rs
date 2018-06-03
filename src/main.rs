@@ -9,17 +9,17 @@ extern crate serde_json;
 
 mod packet;
 
-use packet::netflow::NetflowPacket;
 use packet::netflow::Netflow;
+use packet::netflow::NetflowPacket;
 use packet::netflow::Record;
 use pcap::Capture;
 use pnet::packet::FromPacket;
 use pnet::packet::Packet;
-use pnet::packet::udp::UdpPacket;
-use pnet::packet::ethernet::EthernetPacket;
 use pnet::packet::ethernet::EtherTypes::Ipv4;
-use pnet::packet::ipv4::Ipv4Packet;
+use pnet::packet::ethernet::EthernetPacket;
 use pnet::packet::ip::IpNextHeaderProtocols::Udp;
+use pnet::packet::ipv4::Ipv4Packet;
+use pnet::packet::udp::UdpPacket;
 
 use std::env;
 use std::io;
@@ -38,11 +38,11 @@ fn main() {
             let ether = EthernetPacket::new(packet.data).expect("invalid ethernet packet");
             let ip = match ether.get_ethertype() {
                 Ipv4 => Ipv4Packet::new(ether.payload()).expect("invalid IPv4 packet"),
-                _ => panic!("non-IPv4 packet found")
+                _ => panic!("non-IPv4 packet found"),
             };
             let udp = match ip.get_next_level_protocol() {
                 Udp => UdpPacket::new(ip.payload()).expect("invalid UDP packet"),
-                _ => panic!("non-UDP packet found")
+                _ => panic!("non-UDP packet found"),
             };
             let nf5 = if udp.get_destination() == 9500 {
                 NetflowPacket::new(udp.payload()).expect("invalid Netflow packet")
@@ -55,7 +55,6 @@ fn main() {
             for r in &netflow.records {
                 let flow = Flow::from_pdu(&r, boottime);
                 wtr.serialize(flow).expect("error writing to standard out");
-
             }
             wtr.flush().expect("error flushing standard out");
         }
@@ -64,8 +63,6 @@ fn main() {
         process::exit(1);
     }
 }
-
-
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Flow {
@@ -93,7 +90,7 @@ impl Flow {
             last: boottime + r.last as u64 * MS_NANO_SECS,
             src_port: r.src_port,
             dst_port: r.dst_port,
-            prot: r.prot
+            prot: r.prot,
         }
     }
 }
