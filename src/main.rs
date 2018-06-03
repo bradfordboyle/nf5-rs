@@ -3,11 +3,15 @@ extern crate pcap;
 extern crate pnet;
 extern crate pnet_macros_support;
 extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate serde_json;
 
 mod packet;
 
 use packet::netflow::NetflowPacket;
+use packet::netflow::Netflow;
+use packet::netflow::Record;
 use pcap::Capture;
 use pnet::packet::FromPacket;
 use pnet::packet::Packet;
@@ -17,9 +21,9 @@ use pnet::packet::ethernet::EtherTypes::Ipv4;
 use pnet::packet::ipv4::Ipv4Packet;
 use pnet::packet::ip::IpNextHeaderProtocols::Udp;
 
-use std::error;
 use std::env;
 use std::io;
+use std::net::Ipv4Addr;
 use std::path::Path;
 use std::process;
 
@@ -28,16 +32,32 @@ fn main() {
         let path = Path::new(&arg1);
         let mut cap = Capture::from_file(path).unwrap();
 
-        let n = CsvNetflowVisitor::new(io::stdout());
-        let u = UdpVisitor::new(n, 9500);
-        let i = Ipv4Visitor::new(u);
+        let mut wtr = csv::Writer::from_writer(io::stdout());
 
         while let Ok(packet) = cap.next() {
-            let e = EthernetPacket::new(packet.data).unwrap();
-            match e.get_ethertype() {
-                Ipv4 => i.accept(e.payload()).expect("unable to process packet"),
-                _ => panic!("non-IPv4 packet found"),
+            let ether = EthernetPacket::new(packet.data).expect("invalid ethernet packet");
+            let ip = match ether.get_ethertype() {
+                Ipv4 => Ipv4Packet::new(ether.payload()).expect("invalid IPv4 packet"),
+                _ => panic!("non-IPv4 packet found")
+            };
+            let udp = match ip.get_next_level_protocol() {
+                Udp => UdpPacket::new(ip.payload()).expect("invalid UDP packet"),
+                _ => panic!("non-UDP packet found")
+            };
+            let nf5 = if udp.get_destination() == 9500 {
+                NetflowPacket::new(udp.payload()).expect("invalid Netflow packet")
+            } else {
+                panic!("invalid UDP port found")
+            };
+            let netflow = nf5.from_packet();
+            let boottime = netflow.boottime();
+
+            for r in &netflow.records {
+                let flow = Flow::from_pdu(&r, boottime);
+                wtr.serialize(flow).expect("error writing to standard out");
+
             }
+            wtr.flush().expect("error flushing standard out");
         }
     } else {
         println!("pcap filename required");
@@ -45,115 +65,35 @@ fn main() {
     }
 }
 
-trait PacketVisitor {
-    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>>;
+
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Flow {
+    source: Ipv4Addr,
+    destination: Ipv4Addr,
+    packets: u32,
+    octets: u32,
+    first: u64,
+    last: u64,
+    src_port: u16,
+    dst_port: u16,
+    prot: u8,
 }
 
-struct Ipv4Visitor<V> {
-    next: V
-}
+const MS_NANO_SECS: u64 = 1_000_000u64;
 
-impl<V> Ipv4Visitor<V> {
-    pub fn new(next: V) -> Self {
-        Self { next }
-    }
-}
-
-impl<V: PacketVisitor> PacketVisitor for Ipv4Visitor<V> {
-    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>> {
-        if let Some(i) = Ipv4Packet::new(d) {
-            match i.get_next_level_protocol() {
-                Udp => self.next.accept(i.payload()),
-                _ => Err(From::from("non-UDP packet found"))
-            }
-        } else {
-            Err(From::from("invalid IPv4 packet"))
+impl Flow {
+    fn from_pdu(r: &Record, boottime: u64) -> Self {
+        Self {
+            source: r.source,
+            destination: r.destination,
+            packets: r.d_pkts,
+            octets: r.d_octets,
+            first: boottime + r.first as u64 * MS_NANO_SECS,
+            last: boottime + r.last as u64 * MS_NANO_SECS,
+            src_port: r.src_port,
+            dst_port: r.dst_port,
+            prot: r.prot
         }
     }
-}
-
-struct UdpVisitor<V> {
-    next: V,
-    port: u16,
-}
-
-impl<V> UdpVisitor<V> {
-    pub fn new(next: V, port: u16) -> Self {
-        Self { next, port}
-    }
-}
-
-impl<V: PacketVisitor> PacketVisitor for UdpVisitor<V> {
-    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>> {
-        if let Some(u) = UdpPacket::new(d) {
-            let dst_port = u.get_destination();
-            if dst_port == self.port {
-                self.next.accept(u.payload())
-            } else {
-                Err(From::from("encountered UDP packet with unexpected port"))
-            }
-        } else {
-            Err(From::from("invalid UDP packet"))
-        }
-    }
-}
-
-struct NetflowVisitor;
-
-impl PacketVisitor for NetflowVisitor {
-    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>> {
-        if let Some(n) = NetflowPacket::new(d) {
-            let netflow = serde_json::to_string(&n.from_packet())?;
-            Ok(println!("{}", netflow))
-        } else {
-            Err(From::from("invalid Netflow v5 packet"))
-        }
-    }
-}
-
-struct CsvNetflowVisitor<W: io::Write> {
-    wtr: csv::Writer<W>,
-}
-
-impl<W: io::Write> CsvNetflowVisitor<W> {
-    pub fn new(wtr: W) -> Self {
-        Self { wtr: csv::Writer::from_writer(wtr) }
-    }
-}
-
-impl<W: io::Write> PacketVisitor for CsvNetflowVisitor<W> {
-    fn accept(&self, d: &[u8]) -> Result<(), Box<error::Error>> {
-        if let Some(n) = NetflowPacket::new(d) {
-            self.wtr.serialize(n.from_packet())?;
-            self.wtr.flush()?;
-            Ok(())
-        } else {
-            Err(From::from("invalid Netflow v5 packet"))
-        }
-    }
-}
-
-fn handle_ipv4(d: &[u8]) {
-    let i = Ipv4Packet::new(d).unwrap();
-
-    match i.get_next_level_protocol() {
-        Udp => handle_udp(i.payload()),
-        _ => panic!("huh?"),
-    }
-}
-
-fn handle_udp(d: &[u8]) {
-    let u = UdpPacket::new(d).unwrap();
-
-    let dst_port = u.get_destination();
-    match dst_port {
-        9500 => handle_netflow(u.payload()),
-        _ => panic!("huh?"),
-    }
-}
-
-fn handle_netflow(d: &[u8]) {
-    let n = NetflowPacket::new(d).unwrap();
-    let netflow = serde_json::to_string(&n.from_packet()).unwrap();
-    println!("{}", netflow);
 }

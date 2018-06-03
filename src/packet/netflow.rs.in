@@ -5,22 +5,31 @@ use std::net::Ipv4Addr;
 
 use serde::ser::{Serialize, SerializeStruct, Serializer};
 
+const MS_NANO_SECS: u64 = 1_000_000u64;
+const SECS_NANO_SECS: u64 = 1_000 * MS_NANO_SECS;
+
 #[packet]
 pub struct Netflow {
     version: u16be,
     count: u16be,
-    sys_uptime: u32be,
-    unix_secs: u32be,
-    unix_nsecs: u32be,
+    pub sys_uptime: u32be,
+    pub unix_secs: u32be,
+    pub unix_nsecs: u32be,
     flow_sequence: u32be,
     engine_type: u8,
     engine_id: u8,
     sampling_interval: u16be,
     #[length_fn = "netflow_records_length"]
-    records: Vec<Record>,
+    pub records: Vec<Record>,
 
     #[payload]
     payload: Vec<u8>
+}
+
+impl Netflow {
+    pub fn boottime(&self) -> u64 {
+        self.unix_secs as u64 * SECS_NANO_SECS + self.unix_nsecs as u64 - self.sys_uptime as u64 * MS_NANO_SECS
+    }
 }
 
 fn netflow_records_length(p: &NetflowPacket) -> usize {
@@ -49,28 +58,28 @@ impl Serialize for Netflow {
 #[packet]
 pub struct Record {
     #[construct_with(u8, u8, u8, u8)]
-    source: Ipv4Addr,
+    pub source: Ipv4Addr,
     #[construct_with(u8, u8, u8, u8)]
-    destination: Ipv4Addr,
+    pub destination: Ipv4Addr,
     #[construct_with(u8, u8, u8, u8)]
-    next_hop: Ipv4Addr,
-    input: u16be,
-    output: u16be,
-    d_pkts: u32be,
-    d_octets: u32be,
-    first: u32be,
-    last: u32be,
-    src_port: u16be,
-    dst_port: u16be,
+    pub next_hop: Ipv4Addr,
+    pub input: u16be,
+    pub output: u16be,
+    pub d_pkts: u32be,
+    pub d_octets: u32be,
+    pub first: u32be,
+    pub last: u32be,
+    pub src_port: u16be,
+    pub dst_port: u16be,
     // is there a better way to handle padding?
     pad1: u8,
-    tcp_flags: u8,
-    prot: u8,
-    tos: u8,
-    src_as: u16be,
-    dst_as: u16be,
-    src_mask: u8,
-    dst_mask: u8,
+    pub tcp_flags: u8,
+    pub prot: u8,
+    pub tos: u8,
+    pub src_as: u16be,
+    pub dst_as: u16be,
+    pub src_mask: u8,
+    pub dst_mask: u8,
     pad2: u16be,
     // is there a better way to do this?
     #[payload]
